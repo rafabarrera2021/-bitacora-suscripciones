@@ -130,13 +130,27 @@ def main() -> None:
     for v in all_videos:
         categories.setdefault(v["category"], []).append(v)
 
-    category_order = sorted(categories.keys(), key=lambda c: -len(categories[c]))
+    # canales por categoría (todos, tengan o no videos recientes) — para la vista "Canales"
+    channels_by_category: dict[str, list[dict]] = {}
+    for cid, title, cat in channels:
+        channels_by_category.setdefault(cat, []).append(
+            {"title": title, "url": f"https://www.youtube.com/channel/{cid}"}
+        )
+    for cat in channels_by_category:
+        channels_by_category[cat].sort(key=lambda c: c["title"].lower())
+
+    # asegurar que toda categoría con canales aparezca aunque no tenga videos recientes
+    for cat in channels_by_category:
+        categories.setdefault(cat, [])
+
+    category_order = sorted(categories.keys(), key=lambda c: -len(channels_by_category.get(c, [])))
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     template = env.get_template("index.html.j2")
 
     html = template.render(
         categories=categories,
+        channels_by_category=channels_by_category,
         category_order=category_order,
         total_videos=len(all_videos),
         total_channels=total,

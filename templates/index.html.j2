@@ -118,20 +118,62 @@
   .panel-header{
     display:flex;
     justify-content:space-between;
-    align-items:baseline;
+    align-items:center;
     margin-bottom:20px;
     padding-bottom:14px;
     border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
+    gap:10px;
   }
   .panel-header h2{
     font-family:'Fraunces', serif;
     font-weight:600;
     font-size:1.5rem;
   }
-  .panel-header .count{
-    font-family:'IBM Plex Mono', monospace;
+  .subtabs{ display:flex; gap:6px; }
+  .subtab-btn{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.8rem;
     color:var(--text-muted);
-    font-size:0.82rem;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:6px 12px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    transition:background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .subtab-btn .count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    opacity:0.8;
+  }
+  .subtab-btn:hover{ color:var(--text); border-color:var(--accent-dim); }
+  .subtab-btn.active{
+    color:var(--bg);
+    background:var(--accent);
+    border-color:var(--accent);
+    font-weight:500;
+  }
+  .subpanel{ display:none; }
+  .subpanel.active{ display:block; animation:fadein 0.2s ease; }
+
+  .channel-list{
+    list-style:none;
+    columns:2;
+    column-gap:32px;
+  }
+  .channel-list li{
+    break-inside:avoid;
+    padding:7px 0;
+    border-bottom:1px solid var(--border);
+    font-size:0.88rem;
+  }
+  .channel-list a:hover{ color:var(--accent); }
+  @media (max-width: 600px){
+    .channel-list{ columns:1; }
   }
 
   .video-row{
@@ -201,7 +243,7 @@
       <li>
         <button class="cat-btn{% if loop.first %} active{% endif %}" data-target="cat-{{ loop.index }}">
           <span>{{ cat }}</span>
-          <span class="cat-count">{{ categories[cat]|length }}</span>
+          <span class="cat-count">{{ channels_by_category.get(cat, [])|length }}</span>
         </button>
       </li>
       {% endfor %}
@@ -214,9 +256,13 @@
   <section class="panel{% if loop.first %} active{% endif %}" id="cat-{{ loop.index }}">
     <div class="panel-header">
       <h2>{{ cat }}</h2>
-      <span class="count">{{ categories[cat]|length }} videos recientes</span>
+      <div class="subtabs">
+        <button class="subtab-btn active" data-subtarget="cat-{{ loop.index }}-videos">Videos <span class="count">{{ categories[cat]|length }}</span></button>
+        <button class="subtab-btn" data-subtarget="cat-{{ loop.index }}-canales">Canales <span class="count">{{ channels_by_category.get(cat, [])|length }}</span></button>
+      </div>
     </div>
 
+    <div class="subpanel active" id="cat-{{ loop.index }}-videos">
     {% if categories[cat] %}
       {% for v in categories[cat] %}
       <a class="video-row" href="{{ v.link }}" target="_blank" rel="noopener">
@@ -238,6 +284,20 @@
     {% else %}
       <p class="empty">Sin videos recientes en esta categoría.</p>
     {% endif %}
+    </div>
+
+    <div class="subpanel" id="cat-{{ loop.index }}-canales">
+      {% set chans = channels_by_category.get(cat, []) %}
+      {% if chans %}
+      <ul class="channel-list">
+        {% for c in chans %}
+        <li><a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title }}</a></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">No hay canales asignados a esta categoría.</p>
+      {% endif %}
+    </div>
   </section>
   {% endfor %}
 </main>
@@ -252,6 +312,19 @@
       btn.classList.add('active');
       document.getElementById(btn.dataset.target).classList.add('active');
       window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+
+  document.querySelectorAll('.panel').forEach(panel => {
+    const subbtns = panel.querySelectorAll('.subtab-btn');
+    const subpanels = panel.querySelectorAll('.subpanel');
+    subbtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        subbtns.forEach(b => b.classList.remove('active'));
+        subpanels.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.subtarget).classList.add('active');
+      });
     });
   });
 </script>
