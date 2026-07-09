@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitácora — panel de suscripciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12151A;
+    --surface: #1B1F27;
+    --surface-hover: #232833;
+    --border: #2A2F3A;
+    --text: #E4E7EC;
+    --text-muted: #8B93A1;
+    --accent: #5EA8A0;
+    --accent-dim: #3D7A74;
+    --gold: #D9A441;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    display:flex;
+    min-height:100vh;
+  }
+  a{color:inherit; text-decoration:none;}
+
+  /* --- barra lateral --- */
+  #sidebar{
+    width:280px;
+    flex-shrink:0;
+    background:var(--surface);
+    border-right:1px solid var(--border);
+    padding:28px 0;
+    overflow-y:auto;
+    height:100vh;
+    position:sticky;
+    top:0;
+  }
+  #brand{
+    padding:0 24px 20px 24px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:16px;
+  }
+  #brand h1{
+    font-family:'Fraunces', serif;
+    font-optical-sizing:auto;
+    font-weight:600;
+    font-size:1.6rem;
+    letter-spacing:-0.01em;
+  }
+  #signal{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--text-muted);
+  }
+  .pulse{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 0 rgba(94,168,160,0.6);
+    animation:pulse 2.4s infinite;
+    flex-shrink:0;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(94,168,160,0.55);}
+    70%{box-shadow:0 0 0 7px rgba(94,168,160,0);}
+    100%{box-shadow:0 0 0 0 rgba(94,168,160,0);}
+  }
+  nav ul{list-style:none;}
+  nav li{padding:0;}
+  .cat-btn{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    width:100%;
+    text-align:left;
+    padding:9px 24px;
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.86rem;
+    cursor:pointer;
+    border-left:3px solid transparent;
+    transition:background 0.12s, color 0.12s;
+  }
+  .cat-btn:hover{ background:var(--surface-hover); color:var(--text); }
+  .cat-btn.active{
+    color:var(--text);
+    background:var(--surface-hover);
+    border-left:3px solid var(--accent);
+    font-weight:500;
+  }
+  .cat-count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--text-muted);
+    background:rgba(255,255,255,0.04);
+    padding:1px 7px;
+    border-radius:10px;
+  }
+
+  /* --- panel principal --- */
+  #main{ flex:1; padding:32px 40px; max-width:900px; }
+  .panel{ display:none; }
+  .panel.active{ display:block; animation:fadein 0.2s ease; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  .panel-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:20px;
+    padding-bottom:14px;
+    border-bottom:1px solid var(--border);
+  }
+  .panel-header h2{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:1.5rem;
+  }
+  .panel-header .count{
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--text-muted);
+    font-size:0.82rem;
+  }
+
+  .video-row{
+    display:flex;
+    gap:16px;
+    padding:14px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .video-row:hover .video-title{ color:var(--accent); }
+  .thumb{
+    width:160px;
+    height:90px;
+    flex-shrink:0;
+    border-radius:6px;
+    object-fit:cover;
+    background:var(--surface-hover);
+  }
+  .video-meta{ flex:1; min-width:0; }
+  .video-title{
+    display:block;
+    font-size:0.98rem;
+    font-weight:500;
+    line-height:1.35;
+    margin-bottom:6px;
+    transition:color 0.12s;
+  }
+  .video-sub{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.74rem;
+    color:var(--text-muted);
+  }
+  .video-sub .channel{ color:var(--gold); }
+
+  .empty{
+    color:var(--text-muted);
+    font-size:0.9rem;
+    padding:20px 0;
+  }
+
+  ::-webkit-scrollbar{ width:8px; }
+  ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:4px; }
+
+  @media (max-width: 800px){
+    body{ flex-direction:column; }
+    #sidebar{ width:100%; height:auto; position:relative; border-right:none; border-bottom:1px solid var(--border); }
+    #main{ padding:24px; }
+    .thumb{ width:110px; height:62px; }
+  }
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div id="brand">
+    <h1>Bitácora</h1>
+    <div id="signal">
+      <span class="pulse"></span>
+      última señal: {{ generated_at }}
+    </div>
+  </div>
+  <nav>
+    <ul>
+      {% for cat in category_order %}
+      <li>
+        <button class="cat-btn{% if loop.first %} active{% endif %}" data-target="cat-{{ loop.index }}">
+          <span>{{ cat }}</span>
+          <span class="cat-count">{{ categories[cat]|length }}</span>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+</aside>
+
+<main id="main">
+  {% for cat in category_order %}
+  <section class="panel{% if loop.first %} active{% endif %}" id="cat-{{ loop.index }}">
+    <div class="panel-header">
+      <h2>{{ cat }}</h2>
+      <span class="count">{{ categories[cat]|length }} videos recientes</span>
+    </div>
+
+    {% if categories[cat] %}
+      {% for v in categories[cat] %}
+      <a class="video-row" href="{{ v.link }}" target="_blank" rel="noopener">
+        {% if v.thumbnail %}
+        <img class="thumb" src="{{ v.thumbnail }}" alt="" loading="lazy">
+        {% else %}
+        <div class="thumb"></div>
+        {% endif %}
+        <div class="video-meta">
+          <span class="video-title">{{ v.title }}</span>
+          <div class="video-sub">
+            <span class="channel">{{ v.channel }}</span>
+            <span>·</span>
+            <span>{{ v.published_display }}</span>
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <p class="empty">Sin videos recientes en esta categoría.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</main>
+
+<script>
+  const buttons = document.querySelectorAll('.cat-btn');
+  const panels = document.querySelectorAll('.panel');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+  });
+</script>
+
+</body>
+</html>
