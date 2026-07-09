@@ -172,6 +172,12 @@
     font-size:0.88rem;
   }
   .channel-list a:hover{ color:var(--accent); }
+  .new-marker{
+    color:var(--gold);
+    font-weight:700;
+    margin-left:4px;
+    font-size:1rem;
+  }
   @media (max-width: 600px){
     .channel-list{ columns:1; }
   }
@@ -289,9 +295,14 @@
     <div class="subpanel" id="cat-{{ loop.index }}-canales">
       {% set chans = channels_by_category.get(cat, []) %}
       {% if chans %}
+      {% if first_run %}
+      <p class="empty" style="margin-bottom:12px;">Esta es la primera ejecución — todavía no hay una comparación anterior para saber qué canales subieron algo nuevo. Eso empezará a verse desde la próxima actualización.</p>
+      {% endif %}
       <ul class="channel-list">
         {% for c in chans %}
-        <li><a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title }}</a></li>
+        <li>
+          <a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title }}</a>{% if c.id in channels_with_new_material %}<span class="new-marker" title="Subió contenido nuevo desde la última actualización">*</span>{% endif %}
+        </li>
         {% endfor %}
       </ul>
       {% else %}

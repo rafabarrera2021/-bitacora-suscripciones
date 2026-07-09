@@ -10,6 +10,7 @@ contra ningún límite de la YouTube Data API.
 """
 import csv
 import json
+import re
 import time
 import concurrent.futures
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ from jinja2 import Environment, FileSystemLoader
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_CSV = ROOT / "data" / "suscripciones_categorizadas.csv"
+STATE_FILE = ROOT / "data" / "last_seen.json"
 OUTPUT_HTML = ROOT / "docs" / "index.html"
 TEMPLATE_DIR = ROOT / "templates"
 
@@ -52,11 +54,17 @@ def fetch_channel_feed(channel_id: str, title: str, category: str) -> list[dict]
                 media_thumbs = entry.get("media_thumbnail")
                 if media_thumbs:
                     thumb = media_thumbs[0].get("url", "")
+                video_id = entry.get("yt_videoid", "")
+                if not video_id:
+                    m = re.search(r"v=([\w-]+)", entry.get("link", ""))
+                    video_id = m.group(1) if m else entry.get("link", "")
                 videos.append(
                     {
                         "title": entry.get("title", "(sin título)"),
                         "link": entry.get("link", "#"),
+                        "video_id": video_id,
                         "channel": title,
+                        "channel_id": channel_id,
                         "category": category,
                         "published_dt": pub_dt,
                         "published_iso": pub_dt.isoformat() if pub_dt else "",
@@ -92,6 +100,20 @@ def fmt_display_date(dt: datetime | None) -> str:
     return dt.strftime("%d %b %Y, %H:%M UTC")
 
 
+def load_previous_state() -> dict[str, list[str]]:
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_state(state: dict[str, list[str]]) -> None:
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+
 def main() -> None:
     channels = load_channels()
     total = len(channels)
@@ -102,7 +124,7 @@ def main() -> None:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {
-            executor.submit(fetch_channel_feed, cid, title, cat): title
+            executor.submit(fetch_channel_feed, cid, title, cat): cid
             for cid, title, cat in channels
         }
         done = 0
@@ -116,6 +138,27 @@ def main() -> None:
                 print(f"  progreso: {done}/{total} canales procesados")
 
     print(f"Videos recolectados: {len(all_videos)} (canales sin feed: {errores})")
+
+    # --- comparar contra la ejecución anterior para saber qué canales subieron algo NUEVO ---
+    previous_state = load_previous_state()
+    first_run = not bool(previous_state)
+
+    current_ids_by_channel: dict[str, list[str]] = {}
+    for v in all_videos:
+        current_ids_by_channel.setdefault(v["channel_id"], []).append(v["video_id"])
+
+    channels_with_new_material: set[str] = set()
+    for cid, current_ids in current_ids_by_channel.items():
+        prev_ids = set(previous_state.get(cid, []))
+        if not first_run and any(vid not in prev_ids for vid in current_ids):
+            channels_with_new_material.add(cid)
+
+    save_state(current_ids_by_channel)
+
+    if first_run:
+        print("Primera ejecución: aún no hay estado previo para comparar, ningún canal se marca como 'nuevo' todavía.")
+    else:
+        print(f"Canales con material nuevo desde la última ejecución: {len(channels_with_new_material)}")
 
     # ordenar globalmente por fecha, más reciente primero
     all_videos.sort(
@@ -134,7 +177,7 @@ def main() -> None:
     channels_by_category: dict[str, list[dict]] = {}
     for cid, title, cat in channels:
         channels_by_category.setdefault(cat, []).append(
-            {"title": title, "url": f"https://www.youtube.com/channel/{cid}"}
+            {"id": cid, "title": title, "url": f"https://www.youtube.com/channel/{cid}"}
         )
     for cat in channels_by_category:
         channels_by_category[cat].sort(key=lambda c: c["title"].lower())
@@ -151,6 +194,8 @@ def main() -> None:
     html = template.render(
         categories=categories,
         channels_by_category=channels_by_category,
+        channels_with_new_material=channels_with_new_material,
+        first_run=first_run,
         category_order=category_order,
         total_videos=len(all_videos),
         total_channels=total,
