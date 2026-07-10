@@ -81,7 +81,7 @@ def fetch_channel_feed(channel_id: str, title: str, category: str) -> list[dict]
     return []
 
 
-def load_channels() -> list[tuple[str, str, str]]:
+def load_channels() -> list[tuple[str, str, str, str]]:
     channels = []
     with open(DATA_CSV, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -89,8 +89,9 @@ def load_channels() -> list[tuple[str, str, str]]:
             cid = row["ID del canal"].strip()
             title = row["Título del canal"].strip()
             cat = row["categoria"].strip()
+            logo = (row.get("logo_url") or "").strip()  # columna opcional
             if cid:
-                channels.append((cid, title, cat))
+                channels.append((cid, title, cat, logo))
     return channels
 
 
@@ -125,7 +126,7 @@ def main() -> None:
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {
             executor.submit(fetch_channel_feed, cid, title, cat): cid
-            for cid, title, cat in channels
+            for cid, title, cat, logo in channels
         }
         done = 0
         for future in concurrent.futures.as_completed(futures):
@@ -175,9 +176,14 @@ def main() -> None:
 
     # canales por categoría (todos, tengan o no videos recientes) — para la vista "Canales"
     channels_by_category: dict[str, list[dict]] = {}
-    for cid, title, cat in channels:
+    for cid, title, cat, logo in channels:
         channels_by_category.setdefault(cat, []).append(
-            {"id": cid, "title": title, "url": f"https://www.youtube.com/channel/{cid}"}
+            {
+                "id": cid,
+                "title": title,
+                "url": f"https://www.youtube.com/channel/{cid}",
+                "logo": logo,
+            }
         )
     for cat in channels_by_category:
         channels_by_category[cat].sort(key=lambda c: c["title"].lower())
