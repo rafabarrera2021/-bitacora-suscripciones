@@ -24,11 +24,12 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_CSV = ROOT / "data" / "suscripciones_categorizadas.csv"
 STATE_FILE = ROOT / "data" / "last_seen.json"
 OUTPUT_HTML = ROOT / "docs" / "index.html"
+DATA_DIR = ROOT / "docs" / "data"
 TEMPLATE_DIR = ROOT / "templates"
 
 MAX_WORKERS = 20          # descargas concurrentes
 TIMEOUT_SECONDS = 10      # por feed individual
-VIDEOS_PER_CHANNEL = 6    # cuántos videos recientes conservar por canal
+VIDEOS_PER_CHANNEL = 4    # cuántos videos recientes conservar por canal (bajado de 6 para aligerar el peso)
 RETRIES = 2
 
 
@@ -192,17 +193,59 @@ def main() -> None:
     for cat in channels_by_category:
         categories.setdefault(cat, [])
 
-    category_order = sorted(categories.keys(), key=lambda c: -len(channels_by_category.get(c, [])))
+    # orden alfabético del panel lateral (antes era por tamaño)
+    category_order = sorted(categories.keys(), key=lambda c: c.lower())
+
+    # --- generar un archivo de datos (JSON) por categoría, en vez de un solo HTML gigante ---
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # limpiar JSONs de una ejecución anterior que ya no correspondan a ninguna categoría actual
+    for old_file in DATA_DIR.glob("cat-*.json"):
+        old_file.unlink()
+
+    category_meta = []  # lo que necesita el HTML/JS: nombre, id de sección, conteo, archivo de datos
+    for idx, cat in enumerate(category_order, start=1):
+        slug = f"cat-{idx}"
+        chans = channels_by_category.get(cat, [])
+        payload = {
+            "category": cat,
+            "videos": [
+                {
+                    "title": v["title"],
+                    "link": v["link"],
+                    "channel": v["channel"],
+                    "thumbnail": v["thumbnail"],
+                    "published_display": v["published_display"],
+                }
+                for v in categories[cat]
+            ],
+            "channels": [
+                {
+                    "title": c["title"],
+                    "url": c["url"],
+                    "logo": c["logo"],
+                    "is_new": c["id"] in channels_with_new_material,
+                }
+                for c in chans
+            ],
+        }
+        (DATA_DIR / f"{slug}.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+        category_meta.append(
+            {
+                "name": cat,
+                "slug": slug,
+                "video_count": len(categories[cat]),
+                "channel_count": len(chans),
+            }
+        )
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     template = env.get_template("index.html.j2")
 
     html = template.render(
-        categories=categories,
-        channels_by_category=channels_by_category,
-        channels_with_new_material=channels_with_new_material,
+        category_meta=category_meta,
         first_run=first_run,
-        category_order=category_order,
         total_videos=len(all_videos),
         total_channels=total,
         generated_at=datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC"),
@@ -211,6 +254,9 @@ def main() -> None:
     OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_HTML.write_text(html, encoding="utf-8")
     print(f"Listo -> {OUTPUT_HTML}")
+    print(f"Peso del HTML principal: {OUTPUT_HTML.stat().st_size / 1024:.1f} KB")
+    total_json_kb = sum(f.stat().st_size for f in DATA_DIR.glob('cat-*.json')) / 1024
+    print(f"Peso total de los {len(category_meta)} archivos de datos (se cargan bajo demanda, no todos de una vez): {total_json_kb:.1f} KB")
 
 
 if __name__ == "__main__":

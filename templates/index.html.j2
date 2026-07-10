@@ -30,7 +30,6 @@
   }
   a{color:inherit; text-decoration:none;}
 
-  /* --- barra lateral --- */
   #sidebar{
     width:280px;
     flex-shrink:0;
@@ -76,7 +75,6 @@
     100%{box-shadow:0 0 0 0 rgba(94,168,160,0);}
   }
   nav ul{list-style:none;}
-  nav li{padding:0;}
   .cat-btn{
     display:flex;
     justify-content:space-between;
@@ -109,11 +107,7 @@
     border-radius:10px;
   }
 
-  /* --- panel principal --- */
   #main{ flex:1; padding:32px 40px; max-width:900px; }
-  .panel{ display:none; }
-  .panel.active{ display:block; animation:fadein 0.2s ease; }
-  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
 
   .panel-header{
     display:flex;
@@ -159,6 +153,41 @@
   }
   .subpanel{ display:none; }
   .subpanel.active{ display:block; animation:fadein 0.2s ease; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  .video-row{
+    display:flex;
+    gap:16px;
+    padding:14px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .video-row:hover .video-title{ color:var(--accent); }
+  .thumb{
+    width:160px;
+    height:90px;
+    flex-shrink:0;
+    border-radius:6px;
+    object-fit:cover;
+    background:var(--surface-hover);
+  }
+  .video-meta{ flex:1; min-width:0; }
+  .video-title{
+    display:block;
+    font-size:0.98rem;
+    font-weight:500;
+    line-height:1.35;
+    margin-bottom:6px;
+    transition:color 0.12s;
+  }
+  .video-sub{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.74rem;
+    color:var(--text-muted);
+  }
+  .video-sub .channel{ color:var(--gold); }
 
   .channel-list{
     list-style:none;
@@ -195,45 +224,7 @@
     margin-left:4px;
     font-size:1rem;
   }
-  @media (max-width: 600px){
-    .channel-list{ columns:1; }
-  }
-
-  .video-row{
-    display:flex;
-    gap:16px;
-    padding:14px 0;
-    border-bottom:1px solid var(--border);
-  }
-  .video-row:hover .video-title{ color:var(--accent); }
-  .thumb{
-    width:160px;
-    height:90px;
-    flex-shrink:0;
-    border-radius:6px;
-    object-fit:cover;
-    background:var(--surface-hover);
-  }
-  .video-meta{ flex:1; min-width:0; }
-  .video-title{
-    display:block;
-    font-size:0.98rem;
-    font-weight:500;
-    line-height:1.35;
-    margin-bottom:6px;
-    transition:color 0.12s;
-  }
-  .video-sub{
-    display:flex;
-    gap:10px;
-    align-items:center;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:0.74rem;
-    color:var(--text-muted);
-  }
-  .video-sub .channel{ color:var(--gold); }
-
-  .empty{
+  .empty, .loading{
     color:var(--text-muted);
     font-size:0.9rem;
     padding:20px 0;
@@ -248,6 +239,9 @@
     #main{ padding:24px; }
     .thumb{ width:110px; height:62px; }
   }
+  @media (max-width: 600px){
+    .channel-list{ columns:1; }
+  }
 </style>
 </head>
 <body>
@@ -261,12 +255,14 @@
     </div>
   </div>
   <nav>
-    <ul>
-      {% for cat in category_order %}
+    <ul id="cat-list">
+      {% for cat in category_meta %}
       <li>
-        <button class="cat-btn{% if loop.first %} active{% endif %}" data-target="cat-{{ loop.index }}">
-          <span>{{ cat }}</span>
-          <span class="cat-count">{{ channels_by_category.get(cat, [])|length }}</span>
+        <button class="cat-btn{% if loop.first %} active{% endif %}"
+                data-slug="{{ cat.slug }}" data-name="{{ cat.name }}"
+                data-videocount="{{ cat.video_count }}" data-channelcount="{{ cat.channel_count }}">
+          <span>{{ cat.name }}</span>
+          <span class="cat-count">{{ cat.channel_count }}</span>
         </button>
       </li>
       {% endfor %}
@@ -275,93 +271,106 @@
 </aside>
 
 <main id="main">
-  {% for cat in category_order %}
-  <section class="panel{% if loop.first %} active{% endif %}" id="cat-{{ loop.index }}">
-    <div class="panel-header">
-      <h2>{{ cat }}</h2>
-      <div class="subtabs">
-        <button class="subtab-btn active" data-subtarget="cat-{{ loop.index }}-videos">Videos <span class="count">{{ categories[cat]|length }}</span></button>
-        <button class="subtab-btn" data-subtarget="cat-{{ loop.index }}-canales">Canales <span class="count">{{ channels_by_category.get(cat, [])|length }}</span></button>
-      </div>
+  <div class="panel-header">
+    <h2 id="current-cat-name"></h2>
+    <div class="subtabs">
+      <button class="subtab-btn active" data-view="videos">Videos <span class="count" id="videos-count"></span></button>
+      <button class="subtab-btn" data-view="canales">Canales <span class="count" id="canales-count"></span></button>
     </div>
+  </div>
 
-    <div class="subpanel active" id="cat-{{ loop.index }}-videos">
-    {% if categories[cat] %}
-      {% for v in categories[cat] %}
-      <a class="video-row" href="{{ v.link }}" target="_blank" rel="noopener">
-        {% if v.thumbnail %}
-        <img class="thumb" src="{{ v.thumbnail }}" alt="" loading="lazy">
-        {% else %}
-        <div class="thumb"></div>
-        {% endif %}
-        <div class="video-meta">
-          <span class="video-title">{{ v.title }}</span>
-          <div class="video-sub">
-            <span class="channel">{{ v.channel }}</span>
-            <span>·</span>
-            <span>{{ v.published_display }}</span>
-          </div>
-        </div>
-      </a>
-      {% endfor %}
-    {% else %}
-      <p class="empty">Sin videos recientes en esta categoría.</p>
-    {% endif %}
-    </div>
+  {% if first_run %}
+  <p class="empty" style="margin-bottom:12px;">Esta es la primera ejecución — todavía no hay una comparación anterior para saber qué canales subieron algo nuevo. Eso empezará a verse desde la próxima actualización.</p>
+  {% endif %}
 
-    <div class="subpanel" id="cat-{{ loop.index }}-canales">
-      {% set chans = channels_by_category.get(cat, []) %}
-      {% if chans %}
-      {% if first_run %}
-      <p class="empty" style="margin-bottom:12px;">Esta es la primera ejecución — todavía no hay una comparación anterior para saber qué canales subieron algo nuevo. Eso empezará a verse desde la próxima actualización.</p>
-      {% endif %}
-      <ul class="channel-list">
-        {% for c in chans %}
-        <li>
-          <span class="channel-item">
-            {% if c.logo %}
-            <img class="channel-logo" src="{{ c.logo }}" alt="" loading="lazy">
-            {% else %}
-            <span class="channel-logo channel-logo-fallback">{{ c.title[0]|upper }}</span>
-            {% endif %}
-            <a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title }}</a>{% if c.id in channels_with_new_material %}<span class="new-marker" title="Subió contenido nuevo desde la última actualización">*</span>{% endif %}
-          </span>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="empty">No hay canales asignados a esta categoría.</p>
-      {% endif %}
-    </div>
-  </section>
-  {% endfor %}
+  <div class="subpanel active" id="view-videos"><p class="loading">Cargando…</p></div>
+  <div class="subpanel" id="view-canales"><p class="loading">Cargando…</p></div>
 </main>
 
 <script>
-  const buttons = document.querySelectorAll('.cat-btn');
-  const panels = document.querySelectorAll('.panel');
-  buttons.forEach(btn => {
+  const cache = {};
+
+  function renderVideos(videos) {
+    if (!videos.length) return '<p class="empty">Sin videos recientes en esta categoría.</p>';
+    return videos.map(v => `
+      <a class="video-row" href="${v.link}" target="_blank" rel="noopener">
+        ${v.thumbnail ? `<img class="thumb" src="${v.thumbnail}" alt="" loading="lazy">` : `<div class="thumb"></div>`}
+        <div class="video-meta">
+          <span class="video-title">${v.title}</span>
+          <div class="video-sub">
+            <span class="channel">${v.channel}</span>
+            <span>·</span>
+            <span>${v.published_display}</span>
+          </div>
+        </div>
+      </a>`).join('');
+  }
+
+  function renderChannels(channels) {
+    if (!channels.length) return '<p class="empty">No hay canales asignados a esta categoría.</p>';
+    const items = channels.map(c => `
+      <li>
+        <span class="channel-item">
+          ${c.logo
+            ? `<img class="channel-logo" src="${c.logo}" alt="" loading="lazy">`
+            : `<span class="channel-logo channel-logo-fallback">${c.title.charAt(0).toUpperCase()}</span>`}
+          <a href="${c.url}" target="_blank" rel="noopener">${c.title}</a>${c.is_new ? `<span class="new-marker" title="Subió contenido nuevo desde la última actualización">*</span>` : ''}
+        </span>
+      </li>`).join('');
+    return `<ul class="channel-list">${items}</ul>`;
+  }
+
+  async function loadCategory(slug, name, videoCount, channelCount) {
+    document.getElementById('current-cat-name').textContent = name;
+    document.getElementById('videos-count').textContent = videoCount;
+    document.getElementById('canales-count').textContent = channelCount;
+
+    if (cache[slug]) {
+      renderInto(cache[slug]);
+      return;
+    }
+    document.getElementById('view-videos').innerHTML = '<p class="loading">Cargando…</p>';
+    document.getElementById('view-canales').innerHTML = '<p class="loading">Cargando…</p>';
+    try {
+      const resp = await fetch(`data/${slug}.json`);
+      const data = await resp.json();
+      cache[slug] = data;
+      renderInto(data);
+    } catch (e) {
+      document.getElementById('view-videos').innerHTML = '<p class="empty">No se pudo cargar esta categoría.</p>';
+    }
+  }
+
+  function renderInto(data) {
+    document.getElementById('view-videos').innerHTML = renderVideos(data.videos);
+    document.getElementById('view-canales').innerHTML = renderChannels(data.channels);
+  }
+
+  const catButtons = document.querySelectorAll('.cat-btn');
+  catButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      buttons.forEach(b => b.classList.remove('active'));
-      panels.forEach(p => p.classList.remove('active'));
+      catButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById(btn.dataset.target).classList.add('active');
+      loadCategory(btn.dataset.slug, btn.dataset.name, btn.dataset.videocount, btn.dataset.channelcount);
       window.scrollTo({top:0, behavior:'instant'});
     });
   });
 
-  document.querySelectorAll('.panel').forEach(panel => {
-    const subbtns = panel.querySelectorAll('.subtab-btn');
-    const subpanels = panel.querySelectorAll('.subpanel');
-    subbtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        subbtns.forEach(b => b.classList.remove('active'));
-        subpanels.forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(btn.dataset.subtarget).classList.add('active');
-      });
+  const subtabButtons = document.querySelectorAll('.subtab-btn');
+  subtabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      subtabButtons.forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
     });
   });
+
+  // cargar la primera categoría automáticamente al abrir la página
+  const firstBtn = document.querySelector('.cat-btn');
+  if (firstBtn) {
+    loadCategory(firstBtn.dataset.slug, firstBtn.dataset.name, firstBtn.dataset.videocount, firstBtn.dataset.channelcount);
+  }
 </script>
 
 </body>
